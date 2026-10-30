@@ -14,6 +14,10 @@
   "IsBetaVersion": true,
   "Installed": false,
   "EnabledByDefault": true,
+  "Plugins": [
+    { "Name": "ToolsetRegistry", "Enabled": true },
+    { "Name": "UnrealMCP", "Enabled": true }
+  ],
   "Modules": [
     {
       "Name": "GraphXPort",
@@ -22,6 +26,11 @@
     },
     {
       "Name": "GraphXPortMerge",
+      "Type": "Editor",
+      "LoadingPhase": "PostEngineInit"
+    },
+    {
+      "Name": "GraphXPortConflictToolset",
       "Type": "Editor",
       "LoadingPhase": "PostEngineInit"
     }

@@ -1,12 +1,10 @@
 # GraphXPort Conflict Toolset (UE 5.8)
 
-## Installation from this repository
-
-Copy this entire `Integrations/GraphXPortConflictToolset` directory to your project's `Plugins/GraphXPortConflictToolset` directory, alongside `Plugins/GraphXPort` and `Plugins/UnrealMCP`. The integration is distributed here as source but remains a separate, optional plugin. Install the UnrealMCP changes providing `FUnrealMCPModule::ExecuteToolJson`, external variable support and compact patch results before building. This integration currently requires UE 5.8's Epic Toolset Registry and Model Context Protocol plugins; GraphXPort's standalone modules do not acquire these dependencies.
+The MCP conflict toolset is the bundled `GraphXPortConflictToolset` editor module in the GraphXPort plugin. Enable the Epic Toolset Registry and Model Context Protocol plugins and install UnrealMCP with `FUnrealMCPModule::ExecuteToolJson`, external variable support and compact patch results. Build with UE 5.8 and restart the editor. GraphXPort export and merge modules do not depend on MCP.
 
 Epic Unreal MCP exposes the merge tools through Toolset Registry. Read-only revision inspection stays in GraphXPortMerge; mutation delegates to the custom UnrealMCP patch engine, which owns transactions, revision guards, compile-before-save and rollback. GraphXPort itself remains usable without either MCP implementation.
 
-Enable this plugin and `ModelContextProtocol`, build, then restart the editor. This plugin enables its GraphXPort, ToolsetRegistry and UnrealMCP dependencies. Discover `GraphXPortConflictToolset.GraphXPortConflictToolset` through Epic's `list_toolsets` and `describe_toolset`. These workflow tools are exposed by the official server; they are not independently mirrored into the custom adapter's catalog.
+Discover `GraphXPortConflictToolset.GraphXPortConflictToolset` through Epic's `list_toolsets` and `describe_toolset`. These workflow tools are exposed by the official server; they are not independently mirrored into the custom adapter's catalog.
 
 ## Efficient workflow
 
@@ -34,7 +32,7 @@ The loader caches up to six revision packages by repository/path/blob identity, 
 
 ## Validation and benchmark
 
-Measured results and limits: [Tests/BENCHMARK.md](Tests/BENCHMARK.md).
+Measured results and limits: [Tests/BENCHMARK.md](../Tests/BENCHMARK.md).
 
 UE 5.8 isolated-host compilation and linking succeeded. The final GraphXPort + native Blueprint authoring groups passed 34 tests, including cache GC retention, external-variable/summary and authored-comment regressions. The focused tests were also invoked through the custom adapter. The official HTTP workflow benchmark checks stage guards, dirty-state refusal, explicit save/stage, compile/save/stage, retry receipts and retention of both fixture edits.
 

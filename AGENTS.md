@@ -24,10 +24,11 @@ Users access GraphXPort directly from Blueprint Editor context menus.
 
 ## Modules
 
-The plugin ships two editor modules:
+The plugin ships three editor modules:
 
 - `GraphXPort` - export, formatting, and Beautify. Has no git dependency and works
   entirely offline, as described below.
+- `GraphXPortConflictToolset` - Epic MCP conflict workflows; depends on ToolsetRegistry and UnrealMCP in UE 5.8.
 - `GraphXPortMerge` - the **GraphXPort Merge** window: git status, side-by-side
   asset revision comparison, and manual conflict resolution. It shells out to
   `git`, which is the one place the plugin invokes an external process.
@@ -245,7 +246,7 @@ It must stay within these bounds:
   no Save button, no paste, nothing written. Staging, unstaging, and anything else
   that changes the index stays in the user's git tool.
 
-The optional, separate `GraphXPortConflictToolset` integration may expose explicit
+The bundled `GraphXPortConflictToolset` module may expose explicit
 preview/apply/save/stage workflows. Its mutations delegate to UnrealMCP's transactional
 patch engine; GraphXPort does not depend on that integration. Staging through the
 exported reader service is only requested after successful compile/save, unchanged
@@ -338,7 +339,7 @@ copied output.
 - Keep files focused; split source files that become difficult to review.
 - Add comments only where editor API behavior or graph semantics are not clear.
 - Keep user-visible strings concise and actionable.
-- Do not add dependencies on UnrealMCP modules.
+- Keep UnrealMCP dependencies confined to GraphXPortConflictToolset.
 
 ## Verification
 
