@@ -3,6 +3,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Docking/TabManager.h"
 #include "GraphXPortTempPackage.h"
+#include "GraphXPortConflictReader.h"
 #include "SGraphXPortMergeWindow.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Docking/SDockTab.h"
@@ -31,6 +32,7 @@ void FGraphXPortMergeModule::StartupModule()
 
 void FGraphXPortMergeModule::ShutdownModule()
 {
+    FGraphXPortConflictReader::ClearRevisionCache();
     if (FSlateApplication::IsInitialized())
     {
         FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(GraphXPortMergeTabIds::MergeWindow);

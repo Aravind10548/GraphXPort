@@ -245,6 +245,14 @@ It must stay within these bounds:
   no Save button, no paste, nothing written. Staging, unstaging, and anything else
   that changes the index stays in the user's git tool.
 
+The optional, separate `GraphXPortConflictToolset` integration may expose explicit
+preview/apply/save/stage workflows. Its mutations delegate to UnrealMCP's transactional
+patch engine; GraphXPort does not depend on that integration. Staging through the
+exported reader service is only requested after successful compile/save, unchanged
+Git-stage identities, a clean package and a matching saved-file hash. Read-only revision
+loads may be cached by blob identity with bounded retention; never force-unload them
+or purge files held by the merge window.
+
 Future import or merge operations must be:
 
 - previewable before mutation

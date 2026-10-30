@@ -16,6 +16,7 @@ public class GraphXPortMerge : ModuleRules
         PrivateDependencyModuleNames.AddRange(new[]
         {
             "ApplicationCore",
+            "Json",
             "BlueprintGraph",
             "GraphEditor",
             "InputCore",

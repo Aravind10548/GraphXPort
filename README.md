@@ -1,5 +1,9 @@
 # GraphXPort
 
+## Optional MCP conflict integration
+
+`GraphXPortMerge` exposes bounded, cached revision inspection and directional graph differences through `FGraphXPortConflictReader`. The optional [GraphXPort Conflict Toolset](Integrations/GraphXPortConflictToolset/README.md) adds Epic MCP review sessions and explicit preview/apply/compile/save/stage workflows backed by UnrealMCP. Follow its installation instructions to copy the separate integration plugin alongside GraphXPort. It requires UE 5.8 and the corresponding UnrealMCP extensions; standalone GraphXPort remains independent of MCP. Graph evidence does not cover every asset property and does not automatically resolve semantic conflicts. Validation and benchmark limits are documented with the integration.
+
 GraphXPort is a standalone Unreal Editor plugin for exporting Blueprint graph flows without MCP, an AI service, or an external process.
 
 ## Current workflow
