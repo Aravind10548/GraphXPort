@@ -21,3 +21,5 @@ FString UGraphXPortConflictToolset::InspectRevision(FString Path, FString Revisi
 { return FGraphXPortConflictReader::Inspect(Path, Revision, Graph, Offset, Limit); }
 FString UGraphXPortConflictToolset::CompareRevisions(FString Path, FString Before, FString After, FString Graph, int32 Offset, int32 Limit)
 { return FGraphXPortConflictReader::Compare(Path, Before, After, Graph, Offset, Limit); }
+FString UGraphXPortConflictToolset::CompareBlueprintDefaults(FString Path, FString Before, FString After, int32 Offset, int32 Limit)
+{ return FGraphXPortConflictReader::CompareDefaults(Path, Before, After, Offset, Limit); }

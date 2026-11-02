@@ -39,6 +39,11 @@ void FGraphXPortMergeModule::ShutdownModule()
     }
 }
 
+bool FGraphXPortMergeModule::IsMergeTabOpen()
+{
+    return FGlobalTabmanager::Get()->FindExistingLiveTab(GraphXPortMergeTabIds::MergeWindow).IsValid();
+}
+
 TSharedRef<SDockTab> FGraphXPortMergeModule::SpawnMergeTab(const FSpawnTabArgs& Args)
 {
     TSharedRef<SGraphXPortMergeWindow> Window = SNew(SGraphXPortMergeWindow);

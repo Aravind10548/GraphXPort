@@ -158,6 +158,10 @@ editors, graphs, selections, clipboard access, or file writes.
 
 ## Safety
 
+### Agent workflow for requested Blueprint conflicts
+
+Use GraphXPort's base/current/incoming evidence to review both sides, then official/custom Unreal MCP tools to integrate the intended changes. Never take incoming or outgoing/current wholesale or invoke Start from Incoming/Mine without explicit user confirmation for that asset and side; a general conflict-resolution request does not authorize discarding either side. Preserve existing unsaved work and user-confirmed contracts. Check relevant variables, interfaces, components and defaults as well as graphs. Search the shared MCP tool index and both live catalogs before declaring a tool unavailable. Verify edited nodes/links/layout, compile the target, save, and verify clean package state before staging only the reviewed asset and confirming no unmerged Git stages remain. Do not claim runtime verification from compilation, and do not commit unless requested. Host-project restrictions on Blueprint access and computer use still apply.
+
 Export operations must not modify Blueprint assets, compile Blueprints, save
 packages, or run PIE.
 

@@ -1,5 +1,8 @@
 #include "GraphXPortConflictToolset.h"
 #include "GraphXPortConflictReader.h"
+#include "GraphXPortMergeModule.h"
+#include "Editor.h"
+#include "Subsystems/AssetEditorSubsystem.h"
 #include "UnrealMCPModule.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
@@ -75,15 +78,22 @@ FString UGraphXPortConflictToolset::OpenBlueprintMerge(FString Path)
         if (State->GetStringField(Key).IsEmpty()) return Fail(TEXT("Requires three present unmerged stages. Add/delete conflicts need manual review."));
     auto Outgoing = Decode(FGraphXPortConflictReader::Compare(Path, TEXT("base"), TEXT("current"), FString(), 0, 200));
     auto Incoming = Decode(FGraphXPortConflictReader::Compare(Path, TEXT("base"), TEXT("incoming"), FString(), 0, 200));
-    if (!Outgoing || !Incoming || !Outgoing->GetBoolField(TEXT("ok")) || !Incoming->GetBoolField(TEXT("ok")))
+    auto OutgoingDefaults = Decode(FGraphXPortConflictReader::CompareDefaults(Path, TEXT("base"), TEXT("current"), 0, 200));
+    auto IncomingDefaults = Decode(FGraphXPortConflictReader::CompareDefaults(Path, TEXT("base"), TEXT("incoming"), 0, 200));
+    if (!Outgoing || !Incoming || !OutgoingDefaults || !IncomingDefaults
+        || !Outgoing->GetBoolField(TEXT("ok")) || !Incoming->GetBoolField(TEXT("ok"))
+        || !OutgoingDefaults->GetBoolField(TEXT("ok")) || !IncomingDefaults->GetBoolField(TEXT("ok")))
         return Fail(TEXT("Could not compare all three revisions."));
-    if (Outgoing->GetBoolField(TEXT("hasMore")) || Incoming->GetBoolField(TEXT("hasMore")))
-        return Fail(TEXT("More than 200 graph differences on a side; use paged revision tools for this asset."));
+    if (Outgoing->GetBoolField(TEXT("hasMore")) || Incoming->GetBoolField(TEXT("hasMore"))
+        || OutgoingDefaults->GetBoolField(TEXT("hasMore")) || IncomingDefaults->GetBoolField(TEXT("hasMore")))
+        return Fail(TEXT("More than 200 graph or class-default differences on a side; use paged revision tools for this asset."));
     auto Session = MakeShared<FSession>(); Session->Id = FGuid::NewGuid().ToString(); Session->Path = Path; Session->Baseline = State;
     if (!Unchanged(*Session)) return Fail(TEXT("Working state or Git stages changed during open; retry."));
     Sessions.Add(Session->Id, Session);
     auto Out = MakeShared<FJsonObject>(); Out->SetBoolField(TEXT("ok"), true); Out->SetStringField(TEXT("sessionId"), Session->Id);
     Out->SetObjectField(TEXT("baseline"), State); Out->SetObjectField(TEXT("outgoing"), Outgoing); Out->SetObjectField(TEXT("incoming"), Incoming);
+    Out->SetObjectField(TEXT("outgoingDefaults"), OutgoingDefaults);
+    Out->SetObjectField(TEXT("incomingDefaults"), IncomingDefaults);
     auto Touched = [](const FObject& Diff)
     {
         TSet<FString> Keys;
@@ -108,7 +118,28 @@ FString UGraphXPortConflictToolset::OpenBlueprintMerge(FString Path)
     for (const FString& Key : Overlaps) OverlapRows.Add(MakeShared<FJsonValueString>(Key));
     Out->SetArrayField(TEXT("overlapCandidates"), OverlapRows);
 
-    Out->SetStringField(TEXT("scope"), TEXT("Graph evidence only; no automatic semantic conflict resolution or coverage of defaults/components/member declarations. Preview requires an explicit graph patch."));
+    auto DefaultProperties = [](const FObject& Diff)
+    {
+        TSet<FString> Keys;
+        for (const auto& Value : Diff->GetArrayField(TEXT("rows")))
+        {
+            const auto Row = Value->AsObject();
+            FString PropertyPath;
+            if (Row && Row->TryGetStringField(TEXT("propertyPath"), PropertyPath)) Keys.Add(PropertyPath);
+        }
+        return Keys;
+    };
+    const auto CurrentDefaults = DefaultProperties(OutgoingDefaults);
+    const auto IncomingDefaultsSet = DefaultProperties(IncomingDefaults);
+    TArray<FString> DefaultOverlaps;
+    for (const FString& PropertyPath : CurrentDefaults)
+        if (IncomingDefaultsSet.Contains(PropertyPath)) DefaultOverlaps.Add(PropertyPath);
+    DefaultOverlaps.Sort();
+    TArray<TSharedPtr<FJsonValue>> DefaultOverlapRows;
+    for (const FString& PropertyPath : DefaultOverlaps) DefaultOverlapRows.Add(MakeShared<FJsonValueString>(PropertyPath));
+    Out->SetArrayField(TEXT("defaultOverlapCandidates"), DefaultOverlapRows);
+
+    Out->SetStringField(TEXT("scope"), TEXT("Graph and Blueprint class-default evidence; components, variable declarations, class settings and arbitrary non-graph asset properties are not compared. Preview requires an explicit graph patch."));
     return Encode(Out);
 }
 
@@ -139,6 +170,54 @@ FString UGraphXPortConflictToolset::InspectMergeNodes(FString SessionId, FString
     } while (true);
     auto Out = MakeShared<FJsonObject>(); Out->SetBoolField(TEXT("ok"), true); Out->SetArrayField(TEXT("nodes"), Rows);
     Out->SetNumberField(TEXT("requested"), Guids.Num()); Out->SetNumberField(TEXT("returned"), Rows.Num());
+    return Encode(Out);
+}
+
+FString UGraphXPortConflictToolset::StartFromRevision(FString SessionId, FString Side, bool Confirm)
+{
+    using namespace GraphXPortMergeWorkflow;
+    if (!IsInGameThread()) return Fail(TEXT("Requires editor game thread."));
+    if (!Confirm) return Fail(TEXT("No change made. Call again with Confirm=true only after reviewing the side's changes and confirming replacement."));
+    if (Side != TEXT("current") && Side != TEXT("incoming")) return Fail(TEXT("Side must be current or incoming."));
+
+    auto Session = Find(SessionId);
+    if (!Session || Session->bApplied || !Unchanged(*Session))
+        return Fail(TEXT("Missing, expired, already used, dirty or stale review session; reopen review before replacing."));
+    if (FGraphXPortMergeModule::IsMergeTabOpen())
+        return Fail(TEXT("Close the GraphXPort Merge tab before replacing the working asset; its panes may hold references to revision packages."));
+
+    const FString ObjectPath = Session->Baseline->GetStringField(TEXT("objectPath"));
+    UObject* WorkingAsset = LoadObject<UObject>(nullptr, *ObjectPath);
+    if (!WorkingAsset) return Fail(TEXT("Could not load the live working asset for editor-safety checks."));
+    if (GEditor)
+    {
+        if (UAssetEditorSubsystem* AssetEditors = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
+        {
+            if (!AssetEditors->FindEditorsForAsset(WorkingAsset).IsEmpty())
+                return Fail(TEXT("Close all editors for the working asset before replacing it; they may hold references to objects that reload will replace."));
+        }
+    }
+
+    const FString Path = Session->Path;
+    FString Error;
+    const bool bReplaced = FGraphXPortConflictReader::ReplaceWorkingFileWithRevision(Path, Side == TEXT("incoming"), Error);
+
+    if (bReplaced)
+    {
+        Session->bApplied = true;
+        Session->bSave = false;
+        Session->bStage = false;
+    }
+
+    auto Out = MakeShared<FJsonObject>();
+    Out->SetBoolField(TEXT("ok"), bReplaced);
+    Out->SetBoolField(TEXT("replaced"), bReplaced);
+    Out->SetBoolField(TEXT("staged"), false);
+    Out->SetStringField(TEXT("sessionId"), SessionId);
+    Out->SetStringField(TEXT("path"), Path);
+    Out->SetStringField(TEXT("side"), Side);
+    if (!Error.IsEmpty()) Out->SetStringField(bReplaced ? TEXT("reloadWarning") : TEXT("error"), Error);
+    if (bReplaced) Out->SetStringField(TEXT("nextStep"), TEXT("Review and copy compatible changes from the other side, then compile, save and explicitly stage the resolved asset."));
     return Encode(Out);
 }
 

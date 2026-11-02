@@ -2,7 +2,7 @@
 
 ## Optional MCP conflict toolset
 
-`GraphXPortMerge` exposes bounded, cached revision inspection and directional graph differences through `FGraphXPortConflictReader`. The bundled `GraphXPortConflictToolset` editor module in this plugin adds Epic MCP review sessions and explicit preview/apply/compile/save/stage workflows backed by UnrealMCP. The export and merge modules remain independent of MCP. Install UnrealMCP and enable ModelContextProtocol in UE 5.8. The GraphXPort descriptor enables ToolsetRegistry and UnrealMCP; no separate conflict-toolset plugin is needed. Graph evidence does not cover every asset property or automatically resolve semantic conflicts. See [the toolset guide](docs/ConflictToolset.md) for setup, validation, and limits.
+`GraphXPortMerge` exposes bounded, cached revision inspection, directional graph differences and Blueprint class-default differences through `FGraphXPortConflictReader`. The bundled `GraphXPortConflictToolset` editor module in this plugin adds Epic MCP review sessions and explicit preview/apply/compile/save/stage workflows backed by UnrealMCP. The export and merge modules remain independent of MCP. Install UnrealMCP and enable ModelContextProtocol in UE 5.8. The GraphXPort descriptor enables ToolsetRegistry and UnrealMCP; no separate conflict-toolset plugin is needed. Graph and class-default evidence does not cover every asset property or automatically resolve semantic conflicts. See [the toolset guide](docs/ConflictToolset.md) for setup, validation, and limits.
 
 GraphXPort is a standalone Unreal Editor plugin for exporting Blueprint graph flows without MCP, an AI service, or an external process.
 

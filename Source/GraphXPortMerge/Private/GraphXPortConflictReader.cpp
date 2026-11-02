@@ -14,6 +14,7 @@
 #include "UObject/Package.h"
 #include "K2Node_CallFunction.h"
 #include "K2Node_Variable.h"
+#include "DiffUtils.h"
 
 namespace GraphXPortConflictReaderPrivate
 {
@@ -147,7 +148,7 @@ FObject Pin(UEdGraphPin* Value)
     Out->SetArrayField(TEXT("links"), Links);
     return Out;
 }
-FString Page(FRows& Rows, int32 Offset, int32 Limit, FObject Out)
+FString Page(FRows& Rows, int32 Offset, int32 Limit, FObject Out, const TCHAR* Coverage = TEXT("Graphs, nodes and pins only. Class defaults, components, variable declarations and non-graph properties are not compared. Graph differences are not proof of semantic conflicts."))
 {
     Offset = FMath::Max(0, Offset); Limit = FMath::Clamp(Limit, 1, 200);
     FRows PageRows;
@@ -158,7 +159,7 @@ FString Page(FRows& Rows, int32 Offset, int32 Limit, FObject Out)
     Out->SetNumberField(TEXT("nextOffset"), End);
     Out->SetBoolField(TEXT("hasMore"), End < Rows.Num());
     Out->SetArrayField(TEXT("rows"), PageRows);
-    Out->SetStringField(TEXT("coverage"), TEXT("Graphs, nodes and pins only. Class defaults, components, variable declarations and non-graph properties are not compared. Graph differences are not proof of semantic conflicts."));
+    Out->SetStringField(TEXT("coverage"), Coverage);
     return Encode(Out);
 }
 }
@@ -276,6 +277,61 @@ FString FGraphXPortConflictReader::Compare(const FString& Path, const FString& B
     return Page(Rows, Offset, Limit, Out);
 }
 
+FString FGraphXPortConflictReader::CompareDefaults(const FString& Path, const FString& Before, const FString& After, int32 Offset, int32 Limit)
+{
+    using namespace GraphXPortConflictReaderPrivate;
+    FString Repo, AId, BId, Message;
+    if (!Root(Repo) || !ValidPath(Repo, Path)) return Failure(TEXT("Invalid repository-relative asset path or editor context."));
+    FGraphXPortLoadedAsset A, B;
+    if (!Load(Repo, Path, Before, A, AId, Message)) return Failure(Message);
+    TStrongObjectPtr<UPackage> KeepA(A.Package);
+    if (!Load(Repo, Path, After, B, BId, Message)) return Failure(Message);
+    TStrongObjectPtr<UPackage> KeepB(B.Package);
+    const UObject* BeforeCDO = DiffUtils::GetCDO(A.Blueprint);
+    const UObject* AfterCDO = DiffUtils::GetCDO(B.Blueprint);
+    if (!BeforeCDO || !AfterCDO) return Failure(TEXT("Could not resolve class defaults for both revisions."));
+
+    TArray<FSingleObjectDiffEntry> Differences;
+    DiffUtils::CompareUnrelatedObjects(BeforeCDO, AfterCDO, Differences);
+    FRows Rows;
+    for (const FSingleObjectDiffEntry& Difference : Differences)
+    {
+        auto Row = MakeShared<FJsonObject>();
+        Row->SetStringField(TEXT("propertyPath"), Difference.Identifier.ToDisplayName());
+        Row->SetNumberField(TEXT("diffType"), static_cast<int32>(Difference.DiffType));
+
+        auto ExportValue = [&Difference](const UObject* CDO, FString& OutValue)
+        {
+            const FResolvedProperty Resolved = Difference.Identifier.Resolve(CDO);
+            if (!Resolved.Property || !Resolved.Object) return false;
+            Resolved.Property->ExportText_InContainer(0, OutValue, Resolved.Object, Resolved.Object, nullptr, PPF_None);
+            if (CDO) OutValue.ReplaceInline(*CDO->GetOutermost()->GetName(), TEXT("<self>"));
+            return true;
+        };
+
+        FString BeforeValue, AfterValue;
+        const bool bHasBefore = Difference.DiffType != EPropertyDiffType::PropertyAddedToB && ExportValue(BeforeCDO, BeforeValue);
+        const bool bHasAfter = Difference.DiffType != EPropertyDiffType::PropertyAddedToA && ExportValue(AfterCDO, AfterValue);
+        Row->SetBoolField(TEXT("hasBeforeValue"), bHasBefore);
+        Row->SetBoolField(TEXT("hasAfterValue"), bHasAfter);
+        if (bHasBefore) Row->SetStringField(TEXT("beforeValue"), BeforeValue);
+        if (bHasAfter) Row->SetStringField(TEXT("afterValue"), AfterValue);
+        switch (Difference.DiffType)
+        {
+        case EPropertyDiffType::PropertyAddedToA: Row->SetStringField(TEXT("change"), TEXT("removed")); break;
+        case EPropertyDiffType::PropertyAddedToB: Row->SetStringField(TEXT("change"), TEXT("added")); break;
+        default: Row->SetStringField(TEXT("change"), TEXT("changed")); break;
+        }
+        Rows.Add(MakeShared<FJsonValueObject>(Row));
+    }
+
+    auto Out = MakeShared<FJsonObject>();
+    Out->SetStringField(TEXT("beforeBlobId"), AId);
+    Out->SetStringField(TEXT("afterBlobId"), BId);
+    Out->SetStringField(TEXT("direction"), Before + TEXT(" -> ") + After);
+    return Page(Rows, Offset, Limit, Out, TEXT("Blueprint class-default differences from Unreal DiffUtils. Reports changed property paths and export-text values; does not cover graphs, components, variable declarations, class settings or arbitrary asset properties."));
+}
+
 FString FGraphXPortConflictReader::WorkingState(const FString& Path)
 {
     using namespace GraphXPortConflictReaderPrivate;
@@ -300,6 +356,18 @@ bool FGraphXPortConflictReader::StageResolvedFile(const FString& Path, const FSt
     return Root(Repo) && ValidPath(Repo, Path) && !ExpectedDiskHash.IsEmpty()
         && FGraphXPortGitBlob::HashWorkingFile(Repo, Path, Hash) && Hash == ExpectedDiskHash
         && FGraphXPortGitStatus::StageFile(Repo, Path);
+}
+bool FGraphXPortConflictReader::ReplaceWorkingFileWithRevision(const FString& Path, bool bIncoming, FString& OutError)
+{
+    using namespace GraphXPortConflictReaderPrivate;
+    FString Repo;
+    if (!Root(Repo) || !ValidPath(Repo, Path))
+    {
+        OutError = TEXT("Invalid asset path or editor context.");
+        return false;
+    }
+    ClearRevisionCache();
+    return FGraphXPortTempPackage::ReplaceWorkingFileWithRevision(Repo, bIncoming ? TEXT(":3") : TEXT(":2"), Path, OutError);
 }
 void FGraphXPortConflictReader::ClearRevisionCache()
 {

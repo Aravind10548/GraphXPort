@@ -21,9 +21,17 @@ public:
     UFUNCTION(meta=(AICallable), Category="GraphXPort Conflicts")
     static FString CompareRevisions(FString Path, FString Before, FString After, FString Graph, int32 Offset = 0, int32 Limit = 50);
 
-    /** Open a bounded merge review. Caches revision reads, records stage/disk identities and dirty state, returns outgoing/incoming graph changes. Does not edit. */
+    /** Compare Blueprint class-default values between revisions, with changed property paths and before/after values. Revisions accept base/current/incoming/HEAD/full commit hash. */
+    UFUNCTION(meta=(AICallable), Category="GraphXPort Conflicts")
+    static FString CompareBlueprintDefaults(FString Path, FString Before, FString After, int32 Offset = 0, int32 Limit = 50);
+
+    /** Open a bounded merge review. Returns outgoing/incoming graph and Blueprint class-default changes, records stage/disk identities and dirty state. Does not edit. */
     UFUNCTION(meta=(AICallable), Category="GraphXPort Conflicts")
     static FString OpenBlueprintMerge(FString Path);
+
+    /** Explicitly replace the working asset with current or incoming as a base. Requires Confirm=true, a clean unchanged three-way session, and the GraphXPort Merge tab closed. Nothing is staged. */
+    UFUNCTION(meta=(AICallable), Category="GraphXPort Conflicts")
+    static FString StartFromRevision(FString SessionId, FString Side, bool Confirm = false);
 
     /** Read only the requested node GUIDs, including pins and owner/member identities, from an unchanged session revision. NodeGuidsJson is a JSON string array, at most 100 GUIDs. */
     UFUNCTION(meta=(AICallable), Category="GraphXPort Conflicts")
